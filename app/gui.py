@@ -72,31 +72,23 @@ class PasswordManagerGUI:
         password_var = tk.StringVar()
         ttk.Entry(win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
 
-        ttk.Label(win, text="Departamento(s):").grid(row=2, column=0, padx=5, pady=5, sticky="ne")
-        # Se obtienen los departamentos usando el modelo Sector
-        departments = [s.name for s in self.auth_service.db.query(Sector).all()]
-        dept_listbox = tk.Listbox(win, selectmode=tk.MULTIPLE, height=5, width=28)
-        for dept in departments:
-            dept_listbox.insert(tk.END, dept)
-        dept_listbox.grid(row=2, column=1, padx=5, pady=5)
-
+        # No se muestra campo de Departamento para registro de usuarios comunes.
+        
         def create_user():
             username = username_var.get().strip()
             password = password_var.get().strip()
-            selected_indices = dept_listbox.curselection()
-            if not username or not password or not selected_indices:
+            if not username or not password:
                 messagebox.showwarning("Atención", "Todos los campos son requeridos")
                 return
-            # Solo se toma el primer departamento seleccionado
-            selected_dept = dept_listbox.get(selected_indices[0])
             try:
-                self.auth_service.register_user(username, password, "user", selected_dept)
+                # Pasamos "" para sector_name (o could pass None) para que no se asigne ningún departamento.
+                self.auth_service.register_user(username, password, "user", "")
                 messagebox.showinfo("Éxito", "Usuario creado exitosamente")
                 win.destroy()
             except Exception as e:
                 messagebox.showerror("Error", str(e))
-
-        ttk.Button(win, text="Crear Usuario", command=create_user).grid(row=3, column=0, columnspan=2, pady=10)
+                
+        ttk.Button(win, text="Crear Usuario", command=create_user).grid(row=2, column=0, columnspan=2, pady=10)
 
     def clear_frame(self):
         for widget in self.root.winfo_children():
@@ -166,19 +158,19 @@ class PasswordManagerGUI:
     def refresh_entries(self):
         for i in self.tree.get_children():
             self.tree.delete(i)
-        # For admin: show only entries created by the admin.
+        # Para el admin se muestran solo las entradas creadas por él.
         if self.current_user.role.name == "admin":
             entries = [e for e in self.pw_service.list_entries() if e.created_by == self.current_user.username]
         else:
-            # For non-admin users, filter by the user's sector
-            entries = self.pw_service.list_entries(self.current_user.sector.name)
+            # Para usuarios comunes, se muestran solo las entradas creadas por ellos (ya que no tienen departamento asignado)
+            entries = [e for e in self.pw_service.list_entries() if e.created_by == self.current_user.username]
         for e in entries:
             self.tree.insert("", "end", values=(
                 e.id,
                 e.title,
                 e.username,
                 "********",
-                e.sector.name,
+                e.sector.name if e.sector else "",
                 e.created_at.strftime("%Y-%m-%d %H:%M:%S")
             ))
 
@@ -188,7 +180,7 @@ class PasswordManagerGUI:
         win.title("Panel de administrador")
         win.transient(self.root)
         win.grab_set()
-        
+
         notebook = ttk.Notebook(win)
         notebook.pack(fill="both", expand=True, padx=10, pady=10)
         
@@ -201,13 +193,20 @@ class PasswordManagerGUI:
             user_tree.heading(col, text=col)
             user_tree.column(col, anchor="center")
         user_tree.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+        users_frame.rowconfigure(0, weight=1)
+        users_frame.columnconfigure(0, weight=1)
         
         def load_users():
             for i in user_tree.get_children():
                 user_tree.delete(i)
             users = self.auth_service.db.query(User).all()
             for u in users:
-                user_tree.insert("", "end", values=(u.id, u.username, u.role.name, u.sector.name))
+                user_tree.insert("", "end", values=(
+                    u.id,
+                    u.username,
+                    u.role.name,
+                    u.sector.name if u.sector else ""
+                ))
         load_users()
         
         def create_user():
@@ -340,6 +339,8 @@ class PasswordManagerGUI:
             dept_tree.heading(col, text=col)
             dept_tree.column(col, anchor="center")
         dept_tree.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+        dept_frame.rowconfigure(0, weight=1)
+        dept_frame.columnconfigure(0, weight=1)
         
         def load_departments():
             for i in dept_tree.get_children():
@@ -452,7 +453,7 @@ class PasswordManagerGUI:
                     e.title,
                     e.username,
                     "********",
-                    e.sector.name
+                    e.sector.name if e.sector else ""
                 ))
         refresh_tree()
 
@@ -601,49 +602,42 @@ class PasswordManagerGUI:
         win.transient(self.root)
         win.grab_set()
 
-        fields = ["Título", "Usuario", "Contraseña", "Sector"]
+        fields = ["Título", "Usuario", "Contraseña"]
         vars_ = {}
         default = {
             "Título": entry.title if entry else "",
             "Usuario": entry.username if entry else "",
-            "Contraseña": entry.password if entry else "",
-            "Sector": entry.sector.name if entry else self.current_user.sector.name
+            "Contraseña": entry.password if entry else ""
         }
 
         for i, field in enumerate(fields):
             ttk.Label(win, text=f"{field}:").grid(row=i, column=0, sticky='e', padx=5, pady=5)
             var = tk.StringVar(value=default[field])
-            if field == "Sector":
-                combo = ttk.Combobox(win, textvariable=var,
-                                     values=[s.name for s in self.auth_service.db.query(Sector).all()],
-                                     state="readonly", width=28)
-                combo.grid(row=i, column=1, pady=5)
-            elif field == "Contraseña":
+            if field == "Contraseña":
                 ttk.Entry(win, textvariable=var, show="*", width=30).grid(row=i, column=1, pady=5)
             else:
                 ttk.Entry(win, textvariable=var, width=30).grid(row=i, column=1, pady=5)
             vars_[field] = var
 
         def save():
-            selected_sector = vars_["Sector"].get().strip()
-            if self.current_user.role.name != "admin" and selected_sector != self.current_user.sector.name:
-                messagebox.showerror("Error", "No perteneces al departamento seleccionado, seleccione el suyo o pongase en contacto con el administrador")
-                return
             try:
-                data = {"title": vars_["Título"].get(),
-                        "username": vars_["Usuario"].get(),
-                        "plaintext_password": vars_["Contraseña"].get(),
-                        "sector_name": selected_sector}
+                # Si no hay sector asignado al usuario, se pasa cadena vacía.
+                sector_name = self.current_user.sector.name if self.current_user.sector else ""
+                data = {
+                    "title": vars_["Título"].get(),
+                    "username": vars_["Usuario"].get(),
+                    "plaintext_password": vars_["Contraseña"].get(),
+                    "sector_name": sector_name
+                }
                 if entry:
                     self.pw_service.update_entry(entry.id, **data)
                 else:
-                    # Agregamos created_by usando el nombre del usuario actual
                     self.pw_service.add_entry(**data, created_by=self.current_user.username)
                 win.destroy()
                 self.refresh_entries()
             except Exception as e:
                 messagebox.showerror("Error", str(e))
-
+        
         ttk.Button(win, text="Guardar", command=save).grid(row=len(fields), column=0, columnspan=2, pady=15)
 
     def delete_entry(self):

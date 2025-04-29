@@ -31,7 +31,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
 
     role_id   = Column(Integer, ForeignKey("roles.id"), nullable=False)
-    sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=False)
+    sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=True)  
 
     role   = relationship("Role",   back_populates="users")
     sector = relationship("Sector", back_populates="users")
@@ -45,7 +45,7 @@ class PasswordEntry(Base):
     username           = Column(String, nullable=False)      
     encrypted_password = Column(String, nullable=False)             
     created_at         = Column(DateTime, default=datetime.utcnow)
-    sector_id          = Column(Integer, ForeignKey("sectors.id"), nullable=False)
+    sector_id          = Column(Integer, ForeignKey("sectors.id"), nullable=True)
     created_by         = Column(String, nullable=False) 
 
     sector = relationship("Sector", back_populates="passwords")

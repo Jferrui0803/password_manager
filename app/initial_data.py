@@ -17,21 +17,27 @@ def init_data():
         db.add(role_user)
     db.commit()
     
-    # Crear un sector por defecto si no existe
-    sector_default = db.query(Sector).filter_by(name="IT").first()
-    if not sector_default:
-        sector_default = Sector(name="IT")
-        db.add(sector_default)
+    # Crear sector "Administracion" exclusivo para admin
+    sector_admin = db.query(Sector).filter_by(name="Administracion").first()
+    if not sector_admin:
+        sector_admin = Sector(name="Administracion")
+        db.add(sector_admin)
         db.commit()
+
+    # Crear otros sectores (ejemplo)
+    for sec_name in ["RRHH", "Finanzas", "Marketing", "Ventas", "IT", "Ciberseguridad"]:
+        if not db.query(Sector).filter_by(name=sec_name).first():
+            db.add(Sector(name=sec_name))
+    db.commit()
     
-    # Crear usuario admin si no existe
+    # Crear usuario admin si no existe, asignándolo al sector "Administracion"
     admin = db.query(User).filter_by(username="admin").first()
     if not admin:
         hashed = bcrypt.hashpw("admin".encode(), bcrypt.gensalt()).decode()
         admin = User(username="admin",
                      hashed_password=hashed,
                      role_id=role_admin.id,
-                     sector_id=sector_default.id)
+                     sector_id=sector_admin.id)
         db.add(admin)
         db.commit()
     

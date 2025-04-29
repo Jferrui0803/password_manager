@@ -34,18 +34,21 @@ class PasswordService:
 
     def add_entry(self, title: str, username: str, plaintext_password: str,
                    sector_name: str, created_by: str) -> PasswordEntry:
-        """Crea y guarda una nueva entrada cifrada."""
-        # Busca sector
-        sector = self.db.query(Sector).filter_by(name=sector_name).first()
-        if not sector:
-            raise ValueError(f"Sector '{sector_name}' no existe.")
+        # Si no se proporciona sector_name (o es vacío), se deja sector_id como None.
+        if sector_name and sector_name.strip():
+            sector = self.db.query(Sector).filter_by(name=sector_name).first()
+            if not sector:
+                raise ValueError(f"Sector '{sector_name}' no existe.")
+            sector_id = sector.id
+        else:
+            sector_id = None
 
         encrypted = self.encrypt(plaintext_password)
         entry = PasswordEntry(
             title=title,
             username=username,
             encrypted_password=encrypted,
-            sector_id=sector.id,
+            sector_id=sector_id,
             created_by=created_by
         )
         self.db.add(entry)
