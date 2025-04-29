@@ -33,7 +33,7 @@ class PasswordService:
         return self.fernet.decrypt(token.encode()).decode()
 
     def add_entry(self, title: str, username: str, plaintext_password: str,
-                  url: str, sector_name: str) -> PasswordEntry:
+                   sector_name: str, created_by: str) -> PasswordEntry:
         """Crea y guarda una nueva entrada cifrada."""
         # Busca sector
         sector = self.db.query(Sector).filter_by(name=sector_name).first()
@@ -45,8 +45,8 @@ class PasswordService:
             title=title,
             username=username,
             encrypted_password=encrypted,
-            url=url,
-            sector_id=sector.id
+            sector_id=sector.id,
+            created_by=created_by
         )
         self.db.add(entry)
         self.db.commit()
@@ -78,7 +78,7 @@ class PasswordService:
         self.db.commit()
 
     def update_entry(self, entry_id: int, **kwargs):
-        """Actualiza campos (title, username, plaintext_password, url, sector_name)."""
+        """Actualiza campos (title, username, plaintext_password,sector_name)."""
         entry = self.db.query(PasswordEntry).get(entry_id)
         if not entry:
             raise NoResultFound(f"Entrada con ID={entry_id} no encontrada")
@@ -88,8 +88,6 @@ class PasswordService:
             entry.username = kwargs["username"]
         if "plaintext_password" in kwargs:
             entry.encrypted_password = self.encrypt(kwargs["plaintext_password"])
-        if "url" in kwargs:
-            entry.url = kwargs["url"]
         if "sector_name" in kwargs:
             sector = self.db.query(Sector).filter_by(name=kwargs["sector_name"]).first()
             if not sector:

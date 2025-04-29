@@ -28,22 +28,29 @@ class PasswordManagerGUI:
         self.clear_frame()
         container = ttk.Frame(self.root, padding=30)
         container.pack(expand=True)
+        
+        try:
+            self.logo = tk.PhotoImage(file="img\\kyndryl-logo.png")
+            ttk.Label(container, image=self.logo).grid(row=0, column=0, columnspan=2, pady=(0,15))
+        except Exception as e:
+            print("No se pudo cargar la imagen:", e)
 
-        ttk.Label(container, text="Iniciar Sesión", font=('Segoe UI', 14, 'bold')).grid(row=0, column=0, columnspan=2, pady=(0,20))
-        ttk.Label(container, text="Usuario:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(container, text="Iniciar Sesión", font=('Segoe UI', 14, 'bold')).grid(row=1, column=0, columnspan=2, pady=(5,15))
+        
+        ttk.Label(container, text="Usuario:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
         self.username_var = tk.StringVar()
-        ttk.Entry(container, textvariable=self.username_var, width=30).grid(row=1, column=1, pady=5)
+        ttk.Entry(container, textvariable=self.username_var, width=30).grid(row=2, column=1, pady=5)
 
-        ttk.Label(container, text="Contraseña:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+        ttk.Label(container, text="Contraseña:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
         self.password_var = tk.StringVar()
         self.password_entry = ttk.Entry(container, textvariable=self.password_var, show="*", width=30)
-        self.password_entry.grid(row=2, column=1, pady=5)
+        self.password_entry.grid(row=3, column=1, pady=5)
 
         self.show_password_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(container, text="Mostrar contraseña", variable=self.show_password_var, command=self.toggle_password).grid(row=3, column=1, sticky="w", pady=5)
+        ttk.Checkbutton(container, text="Mostrar contraseña", variable=self.show_password_var, command=self.toggle_password).grid(row=4, column=1, sticky="w", pady=5)
 
-        ttk.Button(container, text="Login", command=self.handle_login).grid(row=4, column=0, columnspan=2, pady=20)
-        ttk.Button(container, text="Crear Usuario", command=self.create_user_window).grid(row=5, column=0, columnspan=2, pady=10)
+        ttk.Button(container, text="Login", command=self.handle_login).grid(row=5, column=0, columnspan=2, pady=20)
+        ttk.Button(container, text="Crear Usuario", command=self.create_user_window).grid(row=6, column=0, columnspan=2, pady=10)
 
     def toggle_password(self):
         if self.show_password_var.get():
@@ -119,6 +126,7 @@ class PasswordManagerGUI:
         ttk.Button(header, text="Logout", command=self.logout).grid(row=0, column=2)
         if self.current_user.role.name == "admin":
             ttk.Button(header, text="Panel de administrador", command=self.admin_panel_window).grid(row=0, column=3, padx=10)
+            ttk.Button(header, text="Vista de usuarios", command=self.view_user_passwords).grid(row=0, column=4, padx=10)
 
         # Frame principal
         main = ttk.Frame(self.root, padding=(10,5))
@@ -133,7 +141,7 @@ class PasswordManagerGUI:
         tree_frame.rowconfigure(0, weight=1)
 
         # Se agregó la columna "Contraseña"
-        cols = ("ID","Título","Usuario","Contraseña","URL","Sector","Creado")
+        cols = ("ID","Título","Usuario","Contraseña","Sector","Creado")
         self.tree = ttk.Treeview(tree_frame, columns=cols, show="headings", selectmode='browse')
         for col in cols:
             self.tree.heading(col, text=col)
@@ -154,6 +162,25 @@ class PasswordManagerGUI:
         ttk.Button(btn_frame, text="Mostrar Contraseña", command=self.show_password).grid(row=0, column=3, padx=5, ipadx=10)
 
         self.refresh_entries()
+
+    def refresh_entries(self):
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+        # For admin: show only entries created by the admin.
+        if self.current_user.role.name == "admin":
+            entries = [e for e in self.pw_service.list_entries() if e.created_by == self.current_user.username]
+        else:
+            # For non-admin users, filter by the user's sector
+            entries = self.pw_service.list_entries(self.current_user.sector.name)
+        for e in entries:
+            self.tree.insert("", "end", values=(
+                e.id,
+                e.title,
+                e.username,
+                "********",
+                e.sector.name,
+                e.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            ))
 
     def admin_panel_window(self):
         from app.models import User, Role, Sector
@@ -396,21 +423,132 @@ class PasswordManagerGUI:
         ttk.Button(dept_frame, text="Eliminar Departamento", command=delete_department).grid(row=1, column=2, padx=10, pady=10)
     
 
-    def refresh_entries(self):
-        for i in self.tree.get_children():
-            self.tree.delete(i)
-        sector_name = None if self.current_user.role.name == "admin" else self.current_user.sector.name
-        entries = self.pw_service.list_entries(sector_name)
-        for e in entries:
-            self.tree.insert("", "end", values=(
-                e.id,
-                e.title,
-                e.username,
-                "********",  
-                e.url or "",
-                e.sector.name,
-                e.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            ))
+    def view_user_passwords(self):
+        win = tk.Toplevel(self.root)
+        win.title("Vista de usuarios")
+        win.transient(self.root)
+        win.grab_set()
+        win.state('zoomed')
+
+        cols = ("ID", "Creada por", "Título", "Usuario", "Contraseña", "Sector")
+        tree = ttk.Treeview(win, columns=cols, show="headings", selectmode="browse")
+        for col in cols:
+            tree.heading(col, text=col)
+            tree.column(col, anchor="center")
+        tree.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=10, pady=10)
+
+        scrollbar = ttk.Scrollbar(win, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscroll=scrollbar.set)
+        scrollbar.grid(row=0, column=4, sticky="ns")
+
+        def refresh_tree():
+            for i in tree.get_children():
+                tree.delete(i)
+            entries = [e for e in self.pw_service.list_entries() if e.created_by != self.current_user.username]
+            for e in entries:
+                tree.insert("", "end", values=(
+                    e.id,
+                    e.created_by,
+                    e.title,
+                    e.username,
+                    "********",
+                    e.sector.name
+                ))
+        refresh_tree()
+
+        def toggle_password():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona una entrada")
+                return
+            item = tree.item(selected[0])
+            current_disp = item["values"][4]
+            entry_id = item["values"][0]
+            entry = self.pw_service.get_entry(entry_id)
+            if current_disp == "********":
+                new_disp = entry.password
+                toggle_btn.config(text="Ocultar Contraseña")
+            else:
+                new_disp = "********"
+                toggle_btn.config(text="Mostrar Contraseña")
+            values = list(item["values"])
+            values[4] = new_disp
+            tree.item(selected[0], values=values)
+
+        def edit_entry():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona una entrada")
+                return
+            entry_id = tree.item(selected[0])["values"][0]
+            entry = self.pw_service.get_entry(entry_id)
+            self.entry_window_for_user(entry, refresh_tree)
+        
+        def delete_entry():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona una entrada")
+                return
+            entry_id = tree.item(selected[0])["values"][0]
+            if messagebox.askyesno("Confirmar", "¿Está seguro de borrar esta entrada?"):
+                self.pw_service.delete_entry(entry_id)
+                tree.delete(selected[0])
+        
+        btn_frame = ttk.Frame(win)
+        btn_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(10,20))
+        for i in range(4):
+            btn_frame.columnconfigure(i, weight=1)
+        
+        ttk.Button(btn_frame, text="Editar", command=edit_entry).grid(row=0, column=0, padx=5, pady=5)
+        ttk.Button(btn_frame, text="Borrar", command=delete_entry).grid(row=0, column=1, padx=5, pady=5)
+        toggle_btn = ttk.Button(btn_frame, text="Mostrar Contraseña", command=toggle_password)
+        toggle_btn.grid(row=0, column=2, padx=5, pady=5)
+
+ 
+    def entry_window_for_user(self, entry, refresh_func):
+        # Esta ventana es similar a entry_window, pero al finalizar llamará a refresh_func para actualizar la ventana de "Vista de usuarios"
+        win = tk.Toplevel(self.root)
+        win.title("Editar Entrada")
+        win.transient(self.root)
+        win.grab_set()
+        fields = ["Título", "Usuario", "Contraseña", "Sector"]
+        vars_ = {}
+        default = {
+            "Título": entry.title,
+            "Usuario": entry.username,
+            "Contraseña": entry.password,
+            "Sector": entry.sector.name
+        }
+        for i, field in enumerate(fields):
+            ttk.Label(win, text=f"{field}:").grid(row=i, column=0, sticky="e", padx=5, pady=5)
+            var = tk.StringVar(value=default[field])
+            if field == "Sector":
+                combo = ttk.Combobox(win, textvariable=var,
+                                     values=[s.name for s in self.auth_service.db.query(Sector).all()],
+                                     state="readonly", width=28)
+                combo.grid(row=i, column=1, pady=5)
+            elif field == "Contraseña":
+                ttk.Entry(win, textvariable=var, show="*", width=30).grid(row=i, column=1, pady=5)
+            else:
+                ttk.Entry(win, textvariable=var, width=30).grid(row=i, column=1, pady=5)
+            vars_[field] = var
+        
+        def save():
+            selected_sector = vars_["Sector"].get().strip()
+            try:
+                data = {
+                    "title": vars_["Título"].get(),
+                    "username": vars_["Usuario"].get(),
+                    "plaintext_password": vars_["Contraseña"].get(),
+                    "sector_name": selected_sector
+                }
+                self.pw_service.update_entry(entry.id, **data)
+                win.destroy()
+                refresh_func()
+            except Exception as e:
+                messagebox.showerror("Error", str(e))
+        
+        ttk.Button(win, text="Guardar", command=save).grid(row=len(fields), column=0, columnspan=2, pady=15)
 
     def reauthenticate(self):
         user_input = simpledialog.askstring("Reautenticación", "Usuario:")
@@ -463,13 +601,12 @@ class PasswordManagerGUI:
         win.transient(self.root)
         win.grab_set()
 
-        fields = ["Título", "Usuario", "Contraseña", "URL", "Sector"]
+        fields = ["Título", "Usuario", "Contraseña", "Sector"]
         vars_ = {}
         default = {
             "Título": entry.title if entry else "",
             "Usuario": entry.username if entry else "",
             "Contraseña": entry.password if entry else "",
-            "URL": entry.url if entry else "",
             "Sector": entry.sector.name if entry else self.current_user.sector.name
         }
 
@@ -477,7 +614,9 @@ class PasswordManagerGUI:
             ttk.Label(win, text=f"{field}:").grid(row=i, column=0, sticky='e', padx=5, pady=5)
             var = tk.StringVar(value=default[field])
             if field == "Sector":
-                combo = ttk.Combobox(win, textvariable=var, values=[s.name for s in self.auth_service.db.query(Sector).all()], state="readonly", width=28)
+                combo = ttk.Combobox(win, textvariable=var,
+                                     values=[s.name for s in self.auth_service.db.query(Sector).all()],
+                                     state="readonly", width=28)
                 combo.grid(row=i, column=1, pady=5)
             elif field == "Contraseña":
                 ttk.Entry(win, textvariable=var, show="*", width=30).grid(row=i, column=1, pady=5)
@@ -486,16 +625,20 @@ class PasswordManagerGUI:
             vars_[field] = var
 
         def save():
+            selected_sector = vars_["Sector"].get().strip()
+            if self.current_user.role.name != "admin" and selected_sector != self.current_user.sector.name:
+                messagebox.showerror("Error", "No perteneces al departamento seleccionado, seleccione el suyo o pongase en contacto con el administrador")
+                return
             try:
                 data = {"title": vars_["Título"].get(),
                         "username": vars_["Usuario"].get(),
                         "plaintext_password": vars_["Contraseña"].get(),
-                        "url": vars_["URL"].get(),
-                        "sector_name": vars_["Sector"].get()}
+                        "sector_name": selected_sector}
                 if entry:
                     self.pw_service.update_entry(entry.id, **data)
                 else:
-                    self.pw_service.add_entry(**data)
+                    # Agregamos created_by usando el nombre del usuario actual
+                    self.pw_service.add_entry(**data, created_by=self.current_user.username)
                 win.destroy()
                 self.refresh_entries()
             except Exception as e:

@@ -8,7 +8,6 @@ entry = svc.add_entry(
     title="Servidor FTP",
     username="ftp_user",
     plaintext_password="MiPassSecreta!",
-    url="ftp://mi-servidor.local",
     sector_name="IT"
 )
 print("Entry creada ID:", entry.id)
@@ -19,7 +18,7 @@ print("Total entradas:", len(all_entries))
 
 # Obtener y desencriptar
 e = svc.get_entry(entry.id)
-print("Datos desencriptados:", e.title, e.username, e.password, e.url)
+print("Datos desencriptados:", e.title, e.username, e.password)
 
 # Actualizar contraseña
 updated = svc.update_entry(entry.id, plaintext_password="NuevaPass123")
