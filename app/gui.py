@@ -45,7 +45,7 @@ class PasswordManagerGUI:
         self.password_var = tk.StringVar()
         self.password_entry = ttk.Entry(container, textvariable=self.password_var, show="*", width=30)
         self.password_entry.grid(row=3, column=1, pady=5)
-
+    
         self.show_password_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(container, text="Mostrar contraseña", variable=self.show_password_var, command=self.toggle_password).grid(row=4, column=1, sticky="w", pady=5)
 
@@ -552,10 +552,10 @@ class PasswordManagerGUI:
         ttk.Button(win, text="Guardar", command=save).grid(row=len(fields), column=0, columnspan=2, pady=15)
 
     def reauthenticate(self):
-        user_input = simpledialog.askstring("Reautenticación", "Usuario:")
+        user_input = simpledialog.askstring("Reautenticación", "Usuario:", parent=self.root)
         if user_input is None:
             return None
-        pwd_input = simpledialog.askstring("Reautenticación", "Contraseña:", show="*")
+        pwd_input = simpledialog.askstring("Reautenticación", "Contraseña:", show="*", parent=self.root)
         if pwd_input is None:
             return None
         try:
@@ -575,10 +575,11 @@ class PasswordManagerGUI:
             return
         entry_id = self.tree.item(selected[0])["values"][0]
         entry = self.pw_service.get_entry(entry_id)
-        # Validar si el usuario tiene rol "user" y la entrada no pertenece a su sector
-        if self.current_user.role.name == "user" and entry.sector.name != self.current_user.sector.name:
-            messagebox.showerror("Error", "No tiene permiso para ver la contraseña de este departamento")
-            return
+        # Para usuarios comunes, si tienen sector asignado se verifica que la entrada pertenezca a él.
+        if self.current_user.role.name == "user" and self.current_user.sector and entry.sector:
+            if entry.sector.name != self.current_user.sector.name:
+                messagebox.showerror("Error", "No tiene permiso para ver la contraseña de este departamento")
+                return
         # Actualizar la celda de la columna "Contraseña" (índice 3)
         vals = list(self.tree.item(selected[0])["values"])
         vals[3] = entry.password
