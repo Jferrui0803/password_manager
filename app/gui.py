@@ -475,21 +475,41 @@ class PasswordManagerGUI:
         win.grab_set()
         win.state('zoomed')
 
+        # Search bar frame
+        search_frame = ttk.Frame(win, padding=10)
+        search_frame.grid(row=0, column=0, sticky="ew")
+        search_frame.columnconfigure(1, weight=1)
+        search_label = ttk.Label(search_frame, text="Buscar (título):")
+        search_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(search_frame, textvariable=search_var, width=25)
+        search_entry.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+
+        # Treeview frame (below search bar)
+        tree_frame = ttk.LabelFrame(win, text="Entradas de Contraseña de Usuarios", padding=10)
+        tree_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        win.rowconfigure(1, weight=1)
+        win.columnconfigure(0, weight=1)
+        tree_frame.columnconfigure(0, weight=1)
+        tree_frame.rowconfigure(0, weight=1)
+
         cols = ("ID", "Creada por", "Título", "Usuario", "Contraseña", "Sector")
-        tree = ttk.Treeview(win, columns=cols, show="headings", selectmode="browse")
+        tree = ttk.Treeview(tree_frame, columns=cols, show="headings", selectmode="browse")
         for col in cols:
             tree.heading(col, text=col)
             tree.column(col, anchor="center")
-        tree.grid(row=0, column=0, columnspan=4, sticky="nsew", padx=10, pady=10)
+        tree.grid(row=0, column=0, sticky="nsew")
 
-        scrollbar = ttk.Scrollbar(win, orient=tk.VERTICAL, command=tree.yview)
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscroll=scrollbar.set)
-        scrollbar.grid(row=0, column=4, sticky="ns")
+        scrollbar.grid(row=0, column=1, sticky="ns")
 
-        def refresh_tree():
+        def refresh_tree(search_text=""):
             for i in tree.get_children():
                 tree.delete(i)
             entries = [e for e in self.pw_service.list_entries() if e.created_by != self.current_user.username]
+            if search_text:
+                entries = [e for e in entries if search_text.lower() in e.title.lower()]
             for e in entries:
                 tree.insert("", "end", values=(
                     e.id,
@@ -500,6 +520,33 @@ class PasswordManagerGUI:
                     e.sector.name if e.sector else ""
                 ))
         refresh_tree()
+        search_entry.bind("<KeyRelease>", lambda event: refresh_tree(search_var.get()))
+
+        # Botones de acción (editar, borrar y mostrar contraseña)
+        # Se ha reducido el padding superior de 10 a 5 para subir los botones un poco
+        btn_frame = ttk.Frame(win, padding=(5,30))
+        btn_frame.grid(row=2, column=0, sticky="ew", pady=(5,30))
+        for i in range(3):
+            btn_frame.columnconfigure(i, weight=1)
+
+        def edit_entry():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona una entrada")
+                return
+            entry_id = tree.item(selected[0])["values"][0]
+            entry = self.pw_service.get_entry(entry_id)
+            self.entry_window_for_user(entry, lambda: refresh_tree(search_var.get()))
+
+        def delete_entry():
+            selected = tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona una entrada")
+                return
+            entry_id = tree.item(selected[0])["values"][0]
+            if messagebox.askyesno("Confirmar", "¿Está seguro de borrar esta entrada?"):
+                self.pw_service.delete_entry(entry_id)
+                tree.delete(selected[0])
 
         def toggle_password():
             selected = tree.selection()
@@ -520,30 +567,6 @@ class PasswordManagerGUI:
             values[4] = new_disp
             tree.item(selected[0], values=values)
 
-        def edit_entry():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showwarning("Atención", "Selecciona una entrada")
-                return
-            entry_id = tree.item(selected[0])["values"][0]
-            entry = self.pw_service.get_entry(entry_id)
-            self.entry_window_for_user(entry, refresh_tree)
-        
-        def delete_entry():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showwarning("Atención", "Selecciona una entrada")
-                return
-            entry_id = tree.item(selected[0])["values"][0]
-            if messagebox.askyesno("Confirmar", "¿Está seguro de borrar esta entrada?"):
-                self.pw_service.delete_entry(entry_id)
-                tree.delete(selected[0])
-        
-        btn_frame = ttk.Frame(win)
-        btn_frame.grid(row=1, column=0, columnspan=4, sticky="ew", pady=(10,20))
-        for i in range(4):
-            btn_frame.columnconfigure(i, weight=1)
-        
         ttk.Button(btn_frame, text="Editar", command=edit_entry).grid(row=0, column=0, padx=5, pady=5)
         ttk.Button(btn_frame, text="Borrar", command=delete_entry).grid(row=0, column=1, padx=5, pady=5)
         toggle_btn = ttk.Button(btn_frame, text="Mostrar Contraseña", command=toggle_password)
