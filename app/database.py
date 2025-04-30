@@ -1,4 +1,3 @@
-# app/database.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
@@ -12,7 +11,7 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Importa **TODOS** los modelos para que se registren en Base.metadata
+
 import app.models
 
 def init_db():

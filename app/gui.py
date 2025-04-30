@@ -106,11 +106,10 @@ class PasswordManagerGUI:
 
     def main_frame(self):
         self.clear_frame()
-        # Configurar layout del root
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
 
-        # Barra superior
+        # Barra superior (código existente)...
         header = ttk.Frame(self.root, padding=10)
         header.grid(row=0, column=0, sticky='ew')
         header.columnconfigure(1, weight=1)
@@ -123,17 +122,27 @@ class PasswordManagerGUI:
         # Frame principal
         main = ttk.Frame(self.root, padding=(10,5))
         main.grid(row=1, column=0, sticky='nsew')
-        main.columnconfigure(0, weight=1)
-        main.rowconfigure(0, weight=1)
+        main.columnconfigure(0, weight=0)
+        main.columnconfigure(1, weight=1)
+        # Configuramos dos filas: la de búsqueda (fila 0) y el listado (fila 1)
+        main.rowconfigure(0, weight=0)
+        main.rowconfigure(1, weight=1)
 
-        # Lista de entradas
-        tree_frame = ttk.LabelFrame(main, text="Entradas de Contraseña", padding=10)
-        tree_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+        # Fila de búsqueda con label
+        search_label = ttk.Label(main, text="Escribe para buscar (título):")
+        search_label.grid(row=0, column=0, sticky="w", padx=5, pady=5)
+        search_var = tk.StringVar()
+        search_entry = ttk.Entry(main, textvariable=search_var, width=25)  
+        search_entry.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+        search_entry.bind("<KeyRelease>", lambda event: self.filter_entries(search_var.get()))
+
+        # Lista de entradas (se coloca en fila 1)
+        tree_frame = ttk.LabelFrame(main, text="Entradas de Contraseña:", padding=10)
+        tree_frame.grid(row=1, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
         tree_frame.columnconfigure(0, weight=1)
         tree_frame.rowconfigure(0, weight=1)
 
-        # Se agregó la columna "Contraseña"
-        cols = ("ID","Título","Usuario","Contraseña","Sector","Creado")
+        cols = ("ID", "Título", "Usuario", "Contraseña", "Sector", "Creado")
         self.tree = ttk.Treeview(tree_frame, columns=cols, show="headings", selectmode='browse')
         for col in cols:
             self.tree.heading(col, text=col)
@@ -144,14 +153,15 @@ class PasswordManagerGUI:
         self.tree.configure(yscroll=scrollbar.set)
         scrollbar.grid(row=0, column=1, sticky='ns')
 
-        # Botones de acción
+        # Botones de acción (código existente)
         btn_frame = ttk.Frame(main, padding=(5,10))
-        btn_frame.grid(row=1, column=0, sticky='ew')
-        btn_frame.columnconfigure((0,1,2,3), weight=1)
+        btn_frame.grid(row=2, column=0, columnspan=2, sticky='ew')
+        btn_frame.columnconfigure((0,1,2,3,4), weight=1)
         ttk.Button(btn_frame, text="Añadir", command=self.open_add).grid(row=0, column=0, padx=5, ipadx=10)
         ttk.Button(btn_frame, text="Editar", command=self.open_edit).grid(row=0, column=1, padx=5, ipadx=10)
         ttk.Button(btn_frame, text="Borrar", command=self.delete_entry).grid(row=0, column=2, padx=5, ipadx=10)
         ttk.Button(btn_frame, text="Mostrar Contraseña", command=self.show_password).grid(row=0, column=3, padx=5, ipadx=10)
+        ttk.Button(btn_frame, text="Copiar Contraseña", command=self.copy_password).grid(row=0, column=4, padx=5, ipadx=10)
 
         self.refresh_entries()
 
@@ -173,6 +183,40 @@ class PasswordManagerGUI:
                 e.sector.name if e.sector else "",
                 e.created_at.strftime("%Y-%m-%d %H:%M:%S")
             ))
+
+    def filter_entries(self, search_text: str):
+        # Clear current rows
+        for i in self.tree.get_children():
+            self.tree.delete(i)
+        # Get entries (same filter by created_by for both admin and users)
+        if self.current_user.role.name == "admin":
+            entries = [e for e in self.pw_service.list_entries() if e.created_by == self.current_user.username]
+        else:
+            entries = [e for e in self.pw_service.list_entries() if e.created_by == self.current_user.username]
+        # If search text is provided, filter by title (case-insensitive)
+        if search_text:
+            entries = [e for e in entries if search_text.lower() in e.title.lower()]
+        for e in entries:
+            self.tree.insert("", "end", values=(
+                e.id,
+                e.title,
+                e.username,
+                "********",
+                e.sector.name if e.sector else "",
+                e.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            ))            
+
+    def copy_password(self):
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showwarning("Atención", "Selecciona una entrada primero")
+            return
+        # Obtener la contraseña real (desencriptada)
+        entry_id = self.tree.item(selected[0])["values"][0]
+        entry = self.pw_service.get_entry(entry_id)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(entry.password)
+        messagebox.showinfo("Copiado", "La contraseña ha sido copiada al portapapeles")
 
     def admin_panel_window(self):
         from app.models import User, Role, Sector
