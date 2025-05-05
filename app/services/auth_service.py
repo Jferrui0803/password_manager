@@ -58,7 +58,7 @@ class AuthService:
         return user
 
     def require_admin(self, user: User):
-        if user.role.name != "admin":
+        if user.role.name not in ["admin", "superadmin"]:
             raise PermissionError("Se requieren privilegios de administrador")
 
     def require_user_sector(self, user: User, sector_name: str):

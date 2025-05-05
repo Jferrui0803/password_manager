@@ -4,6 +4,7 @@ import tkinter.simpledialog as simpledialog
 from app.services.auth_service import AuthService
 from app.services.password_service import PasswordService
 from app.models import Sector
+from app.models import PasswordEntry
 
 class PasswordManagerGUI:
     def __init__(self, root):
@@ -115,7 +116,7 @@ class PasswordManagerGUI:
         header.columnconfigure(1, weight=1)
         ttk.Label(header, text=f"Bienvenido, {self.current_user.username}", font=('Segoe UI', 12, 'bold')).grid(row=0, column=0)
         ttk.Button(header, text="Logout", command=self.logout).grid(row=0, column=2)
-        if self.current_user.role.name == "admin":
+        if self.current_user.role.name in ["admin", "superadmin"]:
             ttk.Button(header, text="Panel de administrador", command=self.admin_panel_window).grid(row=0, column=3, padx=10)
             ttk.Button(header, text="Vista de usuarios", command=self.view_user_passwords).grid(row=0, column=4, padx=10)
 
@@ -268,13 +269,19 @@ class PasswordManagerGUI:
             ttk.Entry(create_win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
             
             ttk.Label(create_win, text="Rol:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-            roles = [r.name for r in self.auth_service.db.query(Role).all()]
+            if self.current_user.role.name == "admin":
+                roles = [r.name for r in self.auth_service.db.query(Role).all() if r.name not in ["admin", "superadmin"]]
+            else:
+                roles = [r.name for r in self.auth_service.db.query(Role).all()]
             role_var = tk.StringVar(value="user")
             ttk.Combobox(create_win, textvariable=role_var, values=roles, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
             
             ttk.Label(create_win, text="Departamento:").grid(row=3, column=0, padx=5, pady=5, sticky="e")
-            sectors = [s.name for s in self.auth_service.db.query(Sector).all()]
-            sector_var = tk.StringVar()
+            if self.current_user.role.name == "admin":
+                sectors = [self.current_user.sector.name]  # Only the admin's own department is available
+            else:
+                sectors = [s.name for s in self.auth_service.db.query(Sector).all()]
+            sector_var = tk.StringVar(value=sectors[0] if sectors else "")
             ttk.Combobox(create_win, textvariable=sector_var, values=sectors, state="readonly", width=28).grid(row=3, column=1, padx=5, pady=5)
             
             def save_user():
@@ -292,8 +299,9 @@ class PasswordManagerGUI:
                     load_users()
                 except Exception as e:
                     messagebox.showerror("Error", str(e))
+            
             ttk.Button(create_win, text="Crear Usuario", command=save_user).grid(row=4, column=0, columnspan=2, pady=10)
-        
+            
         def edit_user():
             selected = user_tree.selection()
             if not selected:
@@ -301,6 +309,18 @@ class PasswordManagerGUI:
                 return
             user_id = user_tree.item(selected[0])["values"][0]
             user = self.auth_service.db.query(User).get(user_id)
+            
+            # Si el usuario actual es admin y se intenta editar a otro usuario
+            if self.current_user.role.name == "admin" and user.id != self.current_user.id:
+                # Solo se permite editar usuarios del mismo departamento
+                if not user.sector or user.sector.name != self.current_user.sector.name:
+                    messagebox.showerror("Error", "No puedes editar usuarios de otros departamentos")
+                    return
+                # No se permite editar usuarios con rol admin o superadmin
+                if user.role.name in ["admin", "superadmin"]:
+                    messagebox.showerror("Error", "No puedes editar a un usuario con rol admin o superadmin")
+                    return
+
             edit_win = tk.Toplevel(win)
             edit_win.title("Editar Usuario")
             edit_win.transient(win)
@@ -315,16 +335,26 @@ class PasswordManagerGUI:
             ttk.Entry(edit_win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
             
             ttk.Label(edit_win, text="Rol:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-            roles = [r.name for r in self.auth_service.db.query(Role).all()]
+            # Si el admin se edita a sí mismo, solo se permite el rol "admin"
+            if self.current_user.role.name == "admin" and user.id == self.current_user.id:
+                roles = ["admin"]
+            elif self.current_user.role.name == "admin":
+                roles = [r.name for r in self.auth_service.db.query(Role).all() if r.name not in ["admin", "superadmin"]]
+            else:
+                roles = [r.name for r in self.auth_service.db.query(Role).all()]
             role_var = tk.StringVar(value=user.role.name)
             ttk.Combobox(edit_win, textvariable=role_var, values=roles, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
             
             ttk.Label(edit_win, text="Departamento:").grid(row=3, column=0, padx=5, pady=5, sticky="e")
-            sectors = [s.name for s in self.auth_service.db.query(Sector).all()]
-            sector_var = tk.StringVar(value=user.sector.name)
+            if self.current_user.role.name == "admin":
+                sectors = [self.current_user.sector.name] if self.current_user.sector else []
+            else:
+                sectors = [s.name for s in self.auth_service.db.query(Sector).all()]
+            sector_var = tk.StringVar(value=user.sector.name if user.sector else (sectors[0] if sectors else ""))
             ttk.Combobox(edit_win, textvariable=sector_var, values=sectors, state="readonly", width=28).grid(row=3, column=1, padx=5, pady=5)
             
             def save_changes():
+                old_username = user.username  
                 new_username = username_var.get().strip()
                 new_role = role_var.get().strip()
                 new_sector = sector_var.get().strip()
@@ -333,7 +363,6 @@ class PasswordManagerGUI:
                     messagebox.showwarning("Atención", "Usuario, Rol y Departamento son requeridos")
                     return
                 user.username = new_username
-                # Actualizar la contraseña solo si se ha ingresado un nuevo valor
                 if new_password:
                     import bcrypt
                     hashed = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
@@ -350,22 +379,54 @@ class PasswordManagerGUI:
                 user.sector_id = sector_obj.id
                 self.auth_service.db.commit()
                 self.auth_service.db.refresh(user)
-                user_tree.item(selected[0], values=(user.id, user.username, user.role.name, user.sector.name))
+                # If the username was changed, update the created_by in all PasswordEntry rows
+                if old_username != new_username:
+                    from app.models import PasswordEntry
+                    entries = self.auth_service.db.query(PasswordEntry).filter_by(created_by=old_username).all()
+                    for entry in entries:
+                        entry.created_by = new_username
+                    self.auth_service.db.commit()
+                user_tree.item(selected[0], values=(user.id, user.username, user.role.name, user.sector.name if user.sector else ""))
                 edit_win.destroy()
             
             ttk.Button(edit_win, text="Guardar", command=save_changes).grid(row=4, column=0, columnspan=2, pady=10)
-        
+
+
         def delete_user():
             selected = user_tree.selection()
             if not selected:
                 messagebox.showwarning("Atención", "Selecciona un usuario")
                 return
             user_id = user_tree.item(selected[0])["values"][0]
+            user = self.auth_service.db.query(User).get(user_id)
+            # Cuando el usuario actual es admin, solo se permite borrar usuarios de su propio departamento.
+            if self.current_user.role.name == "admin":
+                if not user.sector or user.sector.name != self.current_user.sector.name:
+                    messagebox.showerror("Error", "No puedes borrar usuarios de otros departamentos")
+                    return
+            if user.role.name == "superadmin":
+                messagebox.showerror("Error", "No puedes eliminar al usuario superadmin")
+                return
             if user_id == self.current_user.id:
                 messagebox.showerror("Error", "No puedes eliminarte a ti mismo")
                 return
+
+            # Check if the user has any created password entries
+            from app.models import PasswordEntry
+            user_passwords = self.auth_service.db.query(PasswordEntry).filter_by(created_by=user.username).all()
+            if user_passwords:
+                confirm = messagebox.askyesno("Confirmar", 
+                    "Este usuario tiene contraseñas creadas, seguro que quieres eliminarlo?")
+                if not confirm:
+                    return
+                else:
+                    # Delete all password entries belonging to that user
+                    for entry in user_passwords:
+                        self.auth_service.db.delete(entry)
+                    self.auth_service.db.commit()
+
+            # Finally, delete the user
             if messagebox.askyesno("Confirmar", "¿Estás seguro de borrar este usuario?"):
-                user = self.auth_service.db.query(User).get(user_id)
                 self.auth_service.db.delete(user)
                 self.auth_service.db.commit()
                 user_tree.delete(selected[0])
@@ -374,7 +435,7 @@ class PasswordManagerGUI:
         ttk.Button(users_frame, text="Editar Usuario", command=edit_user).grid(row=1, column=1, padx=10, pady=10)
         ttk.Button(users_frame, text="Eliminar Usuario", command=delete_user).grid(row=1, column=2, padx=10, pady=10)
         
-        # --- Pestaña de Departamentos ---
+        # --- Pestaña de Departamentos --- (sin cambios)
         dept_frame = ttk.Frame(notebook)
         notebook.add(dept_frame, text="Departamentos")
         
@@ -426,6 +487,10 @@ class PasswordManagerGUI:
                 return
             dept_id = dept_tree.item(selected[0])["values"][0]
             dept = self.auth_service.db.query(Sector).get(dept_id)
+            # Solo el superadmin puede editar departamentos arbitrarios; un admin solo su propio departamento.
+            if self.current_user.role.name == "admin" and dept.name != self.current_user.sector.name:
+                messagebox.showerror("Error", "No puedes editar un departamento distinto al tuyo")
+                return
             edit_dept_win = tk.Toplevel(win)
             edit_dept_win.title("Editar Departamento")
             edit_dept_win.transient(win)
@@ -453,17 +518,23 @@ class PasswordManagerGUI:
                 messagebox.showwarning("Atención", "Selecciona un departamento")
                 return
             dept_id = dept_tree.item(selected[0])["values"][0]
+            dept = self.auth_service.db.query(Sector).get(dept_id)
+            # Solo el superadmin puede eliminar departamentos arbitrarios; un admin solo el suyo.
+            if self.current_user.role.name == "admin" and dept.name != self.current_user.sector.name:
+                messagebox.showerror("Error", "No puedes eliminar un departamento distinto al tuyo")
+                return
             from app.models import User
             users_in_dept = self.auth_service.db.query(User).filter_by(sector_id=dept_id).count()
             if users_in_dept > 0:
                 messagebox.showerror("Error", "No se puede eliminar un departamento con usuarios asociados")
                 return
-            dept = self.auth_service.db.query(Sector).get(dept_id)
             self.auth_service.db.delete(dept)
             self.auth_service.db.commit()
             dept_tree.delete(selected[0])
         
-        ttk.Button(dept_frame, text="Crear Departamento", command=create_department).grid(row=1, column=0, padx=10, pady=10)
+        # Mostrar botones: Si el usuario es admin, omitimos el botón de "Crear Departamento"
+        if self.current_user.role.name != "admin":
+            ttk.Button(dept_frame, text="Crear Departamento", command=create_department).grid(row=1, column=0, padx=10, pady=10)
         ttk.Button(dept_frame, text="Editar Departamento", command=edit_department).grid(row=1, column=1, padx=10, pady=10)
         ttk.Button(dept_frame, text="Eliminar Departamento", command=delete_department).grid(row=1, column=2, padx=10, pady=10)
     
@@ -507,7 +578,10 @@ class PasswordManagerGUI:
         def refresh_tree(search_text=""):
             for i in tree.get_children():
                 tree.delete(i)
-            entries = [e for e in self.pw_service.list_entries() if e.created_by != self.current_user.username]
+            entries = self.pw_service.list_entries()
+            # For admin, filter only entries from their own department
+            if self.current_user.role.name == "admin":
+                entries = [e for e in entries if e.sector and e.sector.name == self.current_user.sector.name]
             if search_text:
                 entries = [e for e in entries if search_text.lower() in e.title.lower()]
             for e in entries:
@@ -522,8 +596,7 @@ class PasswordManagerGUI:
         refresh_tree()
         search_entry.bind("<KeyRelease>", lambda event: refresh_tree(search_var.get()))
 
-        # Botones de acción (editar, borrar y mostrar contraseña)
-        # Se ha reducido el padding superior de 10 a 5 para subir los botones un poco
+        # Botones de acción (editar, borrar)
         btn_frame = ttk.Frame(win, padding=(5,30))
         btn_frame.grid(row=2, column=0, sticky="ew", pady=(5,30))
         for i in range(3):
@@ -548,33 +621,31 @@ class PasswordManagerGUI:
                 self.pw_service.delete_entry(entry_id)
                 tree.delete(selected[0])
 
-        def toggle_password():
-            selected = tree.selection()
-            if not selected:
-                messagebox.showwarning("Atención", "Selecciona una entrada")
-                return
-            item = tree.item(selected[0])
-            current_disp = item["values"][4]
-            entry_id = item["values"][0]
-            entry = self.pw_service.get_entry(entry_id)
-            if current_disp == "********":
-                new_disp = entry.password
-                toggle_btn.config(text="Ocultar Contraseña")
-            else:
-                new_disp = "********"
-                toggle_btn.config(text="Mostrar Contraseña")
-            values = list(item["values"])
-            values[4] = new_disp
-            tree.item(selected[0], values=values)
-
         ttk.Button(btn_frame, text="Editar", command=edit_entry).grid(row=0, column=0, padx=5, pady=5)
         ttk.Button(btn_frame, text="Borrar", command=delete_entry).grid(row=0, column=1, padx=5, pady=5)
-        toggle_btn = ttk.Button(btn_frame, text="Mostrar Contraseña", command=toggle_password)
-        toggle_btn.grid(row=0, column=2, padx=5, pady=5)
+        if self.current_user.role.name != "admin":
+            toggle_btn = ttk.Button(btn_frame, text="Mostrar Contraseña", command=lambda: self.toggle_entry_password(tree))
+            toggle_btn.grid(row=0, column=2, padx=5, pady=5)
+
+    def toggle_entry_password(self, tree):
+        selected = tree.selection()
+        if not selected:
+            messagebox.showwarning("Atención", "Selecciona una entrada")
+            return
+        item = tree.item(selected[0])
+        current_disp = item["values"][4]
+        entry_id = item["values"][0]
+        entry = self.pw_service.get_entry(entry_id)
+        if current_disp == "********":
+            new_disp = entry.password
+        else:
+            new_disp = "********"
+        values = list(item["values"])
+        values[4] = new_disp
+        tree.item(selected[0], values=values)
 
  
     def entry_window_for_user(self, entry, refresh_func):
-        # Esta ventana es similar a entry_window, pero al finalizar llamará a refresh_func para actualizar la ventana de "Vista de usuarios"
         win = tk.Toplevel(self.root)
         win.title("Editar Entrada")
         win.transient(self.root)
@@ -585,29 +656,38 @@ class PasswordManagerGUI:
             "Título": entry.title,
             "Usuario": entry.username,
             "Contraseña": entry.password,
-            "Sector": entry.sector.name
+            "Sector": entry.sector.name if entry.sector else ""
         }
         for i, field in enumerate(fields):
             ttk.Label(win, text=f"{field}:").grid(row=i, column=0, sticky="e", padx=5, pady=5)
             var = tk.StringVar(value=default[field])
             if field == "Sector":
-                combo = ttk.Combobox(win, textvariable=var,
-                                     values=[s.name for s in self.auth_service.db.query(Sector).all()],
-                                     state="readonly", width=28)
+                # For admin, limit mixbox options to their own department
+                if self.current_user.role.name == "admin" and self.current_user.sector:
+                    options = [self.current_user.sector.name]
+                else:
+                    options = [s.name for s in self.auth_service.db.query(Sector).all()]
+                combo = ttk.Combobox(win, textvariable=var, values=options, state="readonly", width=28)
                 combo.grid(row=i, column=1, pady=5)
             elif field == "Contraseña":
-                ttk.Entry(win, textvariable=var, show="*", width=30).grid(row=i, column=1, pady=5)
+                if self.current_user.role.name == "admin":
+                    # Admins cannot modify the password; show it as disabled.
+                    ttk.Entry(win, textvariable=var, show="*", width=30, state="disabled").grid(row=i, column=1, pady=5)
+                else:
+                    ttk.Entry(win, textvariable=var, show="*", width=30).grid(row=i, column=1, pady=5)
             else:
                 ttk.Entry(win, textvariable=var, width=30).grid(row=i, column=1, pady=5)
             vars_[field] = var
-        
+
         def save():
             selected_sector = vars_["Sector"].get().strip()
+            # For admin, ignore any changes to the password field.
+            password_value = entry.password if self.current_user.role.name == "admin" else vars_["Contraseña"].get()
             try:
                 data = {
                     "title": vars_["Título"].get(),
                     "username": vars_["Usuario"].get(),
-                    "plaintext_password": vars_["Contraseña"].get(),
+                    "plaintext_password": password_value,
                     "sector_name": selected_sector
                 }
                 self.pw_service.update_entry(entry.id, **data)
@@ -637,7 +717,6 @@ class PasswordManagerGUI:
         if not selected:
             messagebox.showwarning("Atención", "Selecciona una entrada primero")
             return
-        # Solicitar reautenticación
         if not self.reauthenticate():
             return
         entry_id = self.tree.item(selected[0])["values"][0]
