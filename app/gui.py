@@ -561,7 +561,7 @@ class PasswordManagerGUI:
             ttk.Button(dept_frame, text="Crear Departamento", command=create_department).grid(row=1, column=0, padx=10, pady=10)
         ttk.Button(dept_frame, text="Editar Departamento", command=edit_department).grid(row=1, column=1, padx=10, pady=10)
         ttk.Button(dept_frame, text="Eliminar Departamento", command=delete_department).grid(row=1, column=2, padx=10, pady=10)
-    
+     
 
     def view_user_passwords(self):
         win = tk.Toplevel(self.root)
@@ -650,10 +650,11 @@ class PasswordManagerGUI:
         ttk.Button(btn_frame, text="Editar", command=edit_entry).grid(row=0, column=0, padx=5, pady=5)
         ttk.Button(btn_frame, text="Borrar", command=delete_entry).grid(row=0, column=1, padx=5, pady=5)
         if self.current_user.role.name != "admin":
-            toggle_btn = ttk.Button(btn_frame, text="Mostrar Contraseña", command=lambda: self.toggle_entry_password(tree))
+            toggle_btn = ttk.Button(btn_frame, text="Mostrar Contraseña")
+            toggle_btn.config(command=lambda: self.toggle_entry_password(tree, toggle_btn))
             toggle_btn.grid(row=0, column=2, padx=5, pady=5)
 
-    def toggle_entry_password(self, tree):
+    def toggle_entry_password(self, tree, toggle_btn):
         selected = tree.selection()
         if not selected:
             messagebox.showwarning("Atención", "Selecciona una entrada")
@@ -664,8 +665,10 @@ class PasswordManagerGUI:
         entry = self.pw_service.get_entry(entry_id)
         if current_disp == "********":
             new_disp = entry.password
+            toggle_btn.config(text="Ocultar Contraseña")
         else:
             new_disp = "********"
+            toggle_btn.config(text="Mostrar Contraseña")
         values = list(item["values"])
         values[4] = new_disp
         tree.item(selected[0], values=values)
