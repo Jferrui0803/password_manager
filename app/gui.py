@@ -40,7 +40,8 @@ class PasswordManagerGUI:
         
         ttk.Label(container, text="Usuario:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
         self.username_var = tk.StringVar()
-        ttk.Entry(container, textvariable=self.username_var, width=30).grid(row=2, column=1, pady=5)
+        username_entry = ttk.Entry(container, textvariable=self.username_var, width=30)
+        username_entry.grid(row=2, column=1, pady=5)
 
         ttk.Label(container, text="Contraseña:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
         self.password_var = tk.StringVar()
@@ -49,6 +50,9 @@ class PasswordManagerGUI:
     
         self.show_password_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(container, text="Mostrar contraseña", variable=self.show_password_var, command=self.toggle_password).grid(row=4, column=1, sticky="w", pady=5)
+
+        # Bind the Enter key (Return) to trigger login
+        self.root.bind('<Return>', lambda event: self.handle_login())
 
         ttk.Button(container, text="Login", command=self.handle_login).grid(row=5, column=0, columnspan=2, pady=20)
         ttk.Button(container, text="Crear Usuario", command=self.create_user_window).grid(row=6, column=0, columnspan=2, pady=10)
