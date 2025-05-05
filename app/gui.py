@@ -105,6 +105,29 @@ class PasswordManagerGUI:
         except Exception as e:
             messagebox.showerror("Error de Login", str(e))
 
+    def add_copy_context_menu(self, tree):
+        def on_right_click(event):
+            region = tree.identify("region", event.x, event.y)
+            if region == "cell":
+                row = tree.identify_row(event.y)
+                col = tree.identify_column(event.x)
+                if row:
+                    try:
+                        col_index = int(col.strip("#")) - 1
+                    except:
+                        col_index = 0
+                    item = tree.item(row)
+                    if "values" in item and len(item["values"]) > col_index:
+                        value = item["values"][col_index]
+                        menu = tk.Menu(tree, tearoff=0)
+                        menu.add_command(label="Copiar", command=lambda: self.copy_to_clipboard(value))
+                        menu.tk_popup(event.x_root, event.y_root)
+        tree.bind("<Button-3>", on_right_click)
+
+    def copy_to_clipboard(self, value):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(str(value))
+        
     def main_frame(self):
         self.clear_frame()
         self.root.columnconfigure(0, weight=1)
@@ -149,7 +172,8 @@ class PasswordManagerGUI:
             self.tree.heading(col, text=col)
             self.tree.column(col, anchor='center')
         self.tree.grid(row=0, column=0, sticky='nsew')
-
+        # Bind right-click copy on the main view tree:
+        self.add_copy_context_menu(self.tree)
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
         scrollbar.grid(row=0, column=1, sticky='ns')
@@ -570,7 +594,9 @@ class PasswordManagerGUI:
             tree.heading(col, text=col)
             tree.column(col, anchor="center")
         tree.grid(row=0, column=0, sticky="nsew")
-
+        # Bind right-click copy on this treeview:
+        self.add_copy_context_menu(tree)
+        
         scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscroll=scrollbar.set)
         scrollbar.grid(row=0, column=1, sticky="ns")
