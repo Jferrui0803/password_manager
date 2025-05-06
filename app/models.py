@@ -1,5 +1,5 @@
 # app/models.py
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -29,6 +29,7 @@ class User(Base):
     id              = Column(Integer, primary_key=True, index=True)
     username        = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    verified        = Column(Boolean, default=False)
 
     role_id   = Column(Integer, ForeignKey("roles.id"), nullable=False)
     sector_id = Column(Integer, ForeignKey("sectors.id"), nullable=True)  

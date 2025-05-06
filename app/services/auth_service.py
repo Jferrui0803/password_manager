@@ -9,16 +9,14 @@ class AuthService:
     def __init__(self, db_session=None):
         self.db = db_session or SessionLocal()
 
-    def register_user(self, username: str, password: str, role_name: str, sector_name: str):
+    def register_user(self, username: str, password: str, role_name: str, sector_name: str, auto_verify: bool = False):
         # Check if user already exists
         if self.db.query(User).filter_by(username=username).first():
             raise ValueError("El nombre de usuario ya está en uso")
 
-        # Buscar role
         role = self.db.query(Role).filter_by(name=role_name).first()
         if not role:
             raise ValueError(f"Role '{role_name}' no existe")
-        # Si sector_name no se proporciona, dejamos sector_id en None.
         if sector_name:
             sector = self.db.query(Sector).filter_by(name=sector_name).first()
             if not sector:
@@ -29,12 +27,15 @@ class AuthService:
 
         import bcrypt
         hashed = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+        # If auto_verify is True or role is admin/superadmin, user is automatically verified.
+        verified = True if auto_verify or role_name in ["admin", "superadmin"] else False
 
         user = User(
             username=username,
             hashed_password=hashed,
             role_id=role.id,
-            sector_id=sector_id
+            sector_id=sector_id,
+            verified=verified
         )
         try:
             self.db.add(user)
@@ -43,6 +44,7 @@ class AuthService:
         except IntegrityError:
             self.db.rollback()
             raise ValueError("El nombre de usuario ya está en uso")
+
 
     def authenticate(self, username: str, password: str):
         user = (
@@ -55,6 +57,9 @@ class AuthService:
             raise ValueError("Usuario o contraseña incorrectos")
         if not bcrypt.checkpw(password.encode(), user.hashed_password.encode()):
             raise ValueError("Usuario o contraseña incorrectos")
+        # Sólo para usuarios con rol "user", verificar que estén verificados
+        if user.role.name == "user" and not user.verified:
+            raise ValueError("Usuario pendiente de verificación")
         return user
 
     def require_admin(self, user: User):

@@ -77,23 +77,25 @@ class PasswordManagerGUI:
         password_var = tk.StringVar()
         ttk.Entry(win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
 
-        # No se muestra campo de Departamento para registro de usuarios comunes.
-        
+        ttk.Label(win, text="Departamento:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
+        departments = ["RRHH", "Finanzas", "Marketing", "Ventas", "IT", "Ciberseguridad"]
+        dept_var = tk.StringVar(value=departments[0])
+        ttk.Combobox(win, textvariable=dept_var, values=departments, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
+
         def create_user():
             username = username_var.get().strip()
             password = password_var.get().strip()
-            if not username or not password:
+            dept = dept_var.get().strip()
+            if not username or not password or not dept:
                 messagebox.showwarning("Atención", "Todos los campos son requeridos")
                 return
             try:
-                # Pasamos "" para sector_name (o could pass None) para que no se asigne ningún departamento.
-                self.auth_service.register_user(username, password, "user", "")
-                messagebox.showinfo("Éxito", "Usuario creado exitosamente")
+                self.auth_service.register_user(username, password, "user", dept)
+                messagebox.showinfo("Pendiente", "Esperando verificación de un administrador")
                 win.destroy()
             except Exception as e:
                 messagebox.showerror("Error", str(e))
-                
-        ttk.Button(win, text="Crear Usuario", command=create_user).grid(row=2, column=0, columnspan=2, pady=10)
+        ttk.Button(win, text="Crear Usuario", command=create_user).grid(row=3, column=0, columnspan=2, pady=10)
 
     def clear_frame(self):
         for widget in self.root.winfo_children():
@@ -274,6 +276,9 @@ class PasswordManagerGUI:
                 user_tree.delete(i)
             users = self.auth_service.db.query(User).all()
             for u in users:
+                # Exclude pending users with role "user"
+                if u.role.name == "user" and not u.verified:
+                    continue
                 user_tree.insert("", "end", values=(
                     u.id,
                     u.username,
@@ -321,7 +326,8 @@ class PasswordManagerGUI:
                     messagebox.showwarning("Atención", "Todos los campos son requeridos")
                     return
                 try:
-                    self.auth_service.register_user(uname, pwd, role_sel, sector_sel)
+                    # When creating a user from the admin panel, auto_verify is set to True.
+                    self.auth_service.register_user(uname, pwd, role_sel, sector_sel, auto_verify=True)
                     messagebox.showinfo("Éxito", "Usuario creado exitosamente")
                     create_win.destroy()
                     load_users()
@@ -462,6 +468,65 @@ class PasswordManagerGUI:
         ttk.Button(users_frame, text="Crear Usuario", command=create_user).grid(row=1, column=0, padx=10, pady=10)
         ttk.Button(users_frame, text="Editar Usuario", command=edit_user).grid(row=1, column=1, padx=10, pady=10)
         ttk.Button(users_frame, text="Eliminar Usuario", command=delete_user).grid(row=1, column=2, padx=10, pady=10)
+        ttk.Button(users_frame, text="Refrescar", command=load_users).grid(row=1, column=3, padx=10, pady=10)
+     # New tab: Verificaciones
+        verif_frame = ttk.Frame(notebook)
+        notebook.add(verif_frame, text="Verificaciones")
+        
+        verif_tree = ttk.Treeview(verif_frame, columns=("ID", "Usuario", "Departamento"), show="headings", selectmode="browse")
+        for col in ("ID", "Usuario", "Departamento"):
+            verif_tree.heading(col, text=col)
+            verif_tree.column(col, anchor="center")
+        verif_tree.grid(row=0, column=0, columnspan=3, padx=10, pady=10, sticky="nsew")
+        verif_frame.rowconfigure(0, weight=1)
+        verif_frame.columnconfigure(0, weight=1)
+        
+        def load_pending_users():
+            for i in verif_tree.get_children():
+                verif_tree.delete(i)
+            user_role = self.auth_service.db.query(Role).filter_by(name="user").first()
+            if self.current_user.role.name == "admin":
+                pending = (
+                    self.auth_service.db.query(User)
+                    .filter_by(verified=False, role_id=user_role.id)
+                    .join(Sector)
+                    .filter(Sector.name == self.current_user.sector.name)
+                    .all()
+                )
+            else:  # superadmin
+                pending = self.auth_service.db.query(User).filter_by(verified=False, role_id=user_role.id).all()
+            for u in pending:
+                verif_tree.insert("", "end", values=(u.id, u.username, u.sector.name if u.sector else ""))
+        load_pending_users()
+
+        def accept_user():
+            selected = verif_tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona un usuario")
+                return
+            user_id = verif_tree.item(selected[0])["values"][0]
+            user = self.auth_service.db.query(User).get(user_id)
+            user.verified = True
+            self.auth_service.db.commit()
+            messagebox.showinfo("Aceptado", f"Usuario {user.username} verificado")
+            load_pending_users()
+
+        def reject_user():
+            selected = verif_tree.selection()
+            if not selected:
+                messagebox.showwarning("Atención", "Selecciona un usuario")
+                return
+            user_id = verif_tree.item(selected[0])["values"][0]
+            user = self.auth_service.db.query(User).get(user_id)
+            if messagebox.askyesno("Confirmar", f"¿Rechazar al usuario {user.username}?"):
+                self.auth_service.db.delete(user)
+                self.auth_service.db.commit()
+                messagebox.showinfo("Rechazado", f"Usuario {user.username} rechazado")
+                load_pending_users()
+
+        ttk.Button(verif_frame, text="Aceptar", command=accept_user).grid(row=1, column=0, padx=10, pady=10)
+        ttk.Button(verif_frame, text="Rechazar", command=reject_user).grid(row=1, column=1, padx=10, pady=10)
+        ttk.Button(verif_frame, text="Refrescar", command=load_pending_users).grid(row=1, column=2, padx=10, pady=10)
         
         # --- Pestaña de Departamentos --- (sin cambios)
         dept_frame = ttk.Frame(notebook)
@@ -801,7 +866,6 @@ class PasswordManagerGUI:
 
         def save():
             try:
-                # Si no hay sector asignado al usuario, se pasa cadena vacía.
                 sector_name = self.current_user.sector.name if self.current_user.sector else ""
                 data = {
                     "title": vars_["Título"].get(),
