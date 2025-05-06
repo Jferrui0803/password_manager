@@ -78,9 +78,13 @@ class PasswordManagerGUI:
         ttk.Entry(win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
 
         ttk.Label(win, text="Departamento:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-        departments = ["RRHH", "Finanzas", "Marketing", "Ventas", "IT", "Ciberseguridad"]
-        dept_var = tk.StringVar(value=departments[0])
-        ttk.Combobox(win, textvariable=dept_var, values=departments, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
+        # Dynamically fetch all departments from the DB (excluding reserved ones if needed)
+        sectors = [s.name for s in self.auth_service.db.query(Sector).all() 
+                   if s.name not in ["Administrador", "SuperAdministrador"]]
+        if not sectors:
+            sectors = ["RRHH", "Finanzas", "Marketing", "Ventas", "IT", "Ciberseguridad"]
+        dept_var = tk.StringVar(value=sectors[0])
+        ttk.Combobox(win, textvariable=dept_var, values=sectors, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
 
         def create_user():
             username = username_var.get().strip()
