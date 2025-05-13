@@ -76,6 +76,7 @@ class PasswordManagerGUI:
         win.title("Crear Usuario")
         win.transient(self.root)
         win.grab_set()
+        self.center_window(win) 
         
         # Call center_window after creating the window structure
         self.center_window(win)
@@ -303,6 +304,7 @@ class PasswordManagerGUI:
             create_win.title("Crear Usuario")
             create_win.transient(win)
             create_win.grab_set()
+            self.center_window(create_win)
             
             ttk.Label(create_win, text="Usuario:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
             username_var = tk.StringVar()
@@ -370,7 +372,8 @@ class PasswordManagerGUI:
             edit_win.title("Editar Usuario")
             edit_win.transient(win)
             edit_win.grab_set()
-            
+            self.center_window(edit_win)
+
             ttk.Label(edit_win, text="Usuario:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
             username_var = tk.StringVar(value=user.username)
             ttk.Entry(edit_win, textvariable=username_var, width=30).grid(row=0, column=1, padx=5, pady=5)
@@ -564,6 +567,7 @@ class PasswordManagerGUI:
             create_dept_win.title("Crear Departamento")
             create_dept_win.transient(win)
             create_dept_win.grab_set()
+            self.center_window(create_dept_win)
             
             ttk.Label(create_dept_win, text="Nombre:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
             name_var = tk.StringVar()
@@ -599,6 +603,7 @@ class PasswordManagerGUI:
             edit_dept_win.title("Editar Departamento")
             edit_dept_win.transient(win)
             edit_dept_win.grab_set()
+            self.center_window(edit_dept_win)
             
             ttk.Label(edit_dept_win, text="Nombre:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
             name_var = tk.StringVar(value=dept.name)
@@ -761,6 +766,8 @@ class PasswordManagerGUI:
         win.title("Editar Entrada")
         win.transient(self.root)
         win.grab_set()
+        self.center_window(win)
+
         fields = ["Título", "Usuario", "Contraseña", "Sector"]
         vars_ = {}
         default = {
@@ -859,6 +866,7 @@ class PasswordManagerGUI:
         win.title("Editar Entrada" if entry else "Nueva Entrada")
         win.transient(self.root)
         win.grab_set()
+        self.center_window(win)
 
         fields = ["Título", "Usuario", "Contraseña"]
         vars_ = {}
