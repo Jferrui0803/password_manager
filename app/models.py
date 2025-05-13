@@ -1,5 +1,6 @@
 # app/models.py
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
+from zoneinfo import ZoneInfo
 from sqlalchemy.orm import relationship
 from .database import Base
 from datetime import datetime
@@ -37,6 +38,8 @@ class User(Base):
     role   = relationship("Role",   back_populates="users")
     sector = relationship("Sector", back_populates="users")
 
+def get_madrid_time():
+    return datetime.now(ZoneInfo("Europe/Madrid"))
 
 class PasswordEntry(Base):
     __tablename__ = "passwords"
@@ -45,7 +48,7 @@ class PasswordEntry(Base):
     title              = Column(String, nullable=False)      
     username           = Column(String, nullable=False)      
     encrypted_password = Column(String, nullable=False)             
-    created_at         = Column(DateTime, default=datetime.utcnow)
+    created_at         = Column(DateTime, default=get_madrid_time)
     sector_id          = Column(Integer, ForeignKey("sectors.id"), nullable=True)
     created_by         = Column(String, nullable=False) 
 

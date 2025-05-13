@@ -11,7 +11,6 @@ class PasswordManagerGUI:
         self.root = root
         self.root.title("Password Manager")
         self.root.geometry("900x650")
-        # Configuración de estilos para un aspecto más moderno
         self.style = ttk.Style()
         self.style.theme_use('clam')
         self.style.configure('TLabel', font=('Segoe UI', 10))
@@ -51,7 +50,6 @@ class PasswordManagerGUI:
         self.show_password_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(container, text="Mostrar contraseña", variable=self.show_password_var, command=self.toggle_password).grid(row=4, column=1, sticky="w", pady=5)
 
-        # Bind the Enter key (Return) to trigger login
         self.root.bind('<Return>', lambda event: self.handle_login())
 
         ttk.Button(container, text="Login", command=self.handle_login).grid(row=5, column=0, columnspan=2, pady=20)
@@ -63,12 +61,25 @@ class PasswordManagerGUI:
         else:
             self.password_entry.config(show="*")
 
+    def center_window(self, win):
+        win.update_idletasks()  
+        width = win.winfo_width()
+        height = win.winfo_height()
+        screen_width = win.winfo_screenwidth()
+        screen_height = win.winfo_screenheight()
+        x = (screen_width // 2) - (width // 2)
+        y = (screen_height // 2) - (height // 2)
+        win.geometry(f"+{x}+{y}")
+
     def create_user_window(self):
         win = tk.Toplevel(self.root)
         win.title("Crear Usuario")
         win.transient(self.root)
         win.grab_set()
-
+        
+        # Call center_window after creating the window structure
+        self.center_window(win)
+        
         ttk.Label(win, text="Usuario:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
         username_var = tk.StringVar()
         ttk.Entry(win, textvariable=username_var, width=30).grid(row=0, column=1, padx=5, pady=5)
@@ -78,7 +89,6 @@ class PasswordManagerGUI:
         ttk.Entry(win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
 
         ttk.Label(win, text="Departamento:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-        # Dynamically fetch all departments from the DB (excluding reserved ones if needed)
         sectors = [s.name for s in self.auth_service.db.query(Sector).all() 
                    if s.name not in ["Administrador", "SuperAdministrador"]]
         if not sectors:
@@ -143,7 +153,6 @@ class PasswordManagerGUI:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
 
-        # Barra superior (código existente)...
         header = ttk.Frame(self.root, padding=10)
         header.grid(row=0, column=0, sticky='ew')
         header.columnconfigure(1, weight=1)
@@ -153,12 +162,10 @@ class PasswordManagerGUI:
             ttk.Button(header, text="Panel de administrador", command=self.admin_panel_window).grid(row=0, column=3, padx=10)
             ttk.Button(header, text="Vista de usuarios", command=self.view_user_passwords).grid(row=0, column=4, padx=10)
 
-        # Frame principal
         main = ttk.Frame(self.root, padding=(10,5))
         main.grid(row=1, column=0, sticky='nsew')
         main.columnconfigure(0, weight=0)
         main.columnconfigure(1, weight=1)
-        # Configuramos dos filas: la de búsqueda (fila 0) y el listado (fila 1)
         main.rowconfigure(0, weight=0)
         main.rowconfigure(1, weight=1)
 
@@ -624,6 +631,8 @@ class PasswordManagerGUI:
             users_in_dept = self.auth_service.db.query(User).filter_by(sector_id=dept_id).count()
             if users_in_dept > 0:
                 messagebox.showerror("Error", "No se puede eliminar un departamento con usuarios asociados")
+                return
+            if not messagebox.askyesno("Confirmar", "¿Está seguro de eliminar este departamento?"):
                 return
             self.auth_service.db.delete(dept)
             self.auth_service.db.commit()
