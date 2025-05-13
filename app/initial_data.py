@@ -61,7 +61,7 @@ def init_data():
     db.commit()
     
     # Crear usuario superadmin y admin (ya existentes)
-    superadmin = db.query(User).filter_by(username="superadmin").first()
+    superadmin = db.query(User).join(Role).filter(Role.name=="superadmin").first()
     if not superadmin:
         hashed = bcrypt.hashpw("superadmin".encode(), bcrypt.gensalt()).decode()
         superadmin = User(

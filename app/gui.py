@@ -315,18 +315,18 @@ class PasswordManagerGUI:
             ttk.Entry(create_win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
             
             ttk.Label(create_win, text="Rol:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-            if self.current_user.role.name == "admin":
-                roles = [r.name for r in self.auth_service.db.query(Role).all() if r.name not in ["admin", "superadmin"]]
-            else:
-                roles = [r.name for r in self.auth_service.db.query(Role).all()]
+            # Se evita el rol "superadmin" en la creación de nuevos usuarios o admins
+            roles = [r.name for r in self.auth_service.db.query(Role).all() if r.name != "superadmin"]
             role_var = tk.StringVar(value="user")
             ttk.Combobox(create_win, textvariable=role_var, values=roles, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
-            
+
             ttk.Label(create_win, text="Departamento:").grid(row=3, column=0, padx=5, pady=5, sticky="e")
             if self.current_user.role.name == "admin":
-                sectors = [self.current_user.sector.name]  # Only the admin's own department is available
+                # El admin solo puede asignarse su propio departamento
+                sectors = [self.current_user.sector.name]
             else:
-                sectors = [s.name for s in self.auth_service.db.query(Sector).all()]
+                # Se excluye el departamento "SuperAdministrador"
+                sectors = [s.name for s in self.auth_service.db.query(Sector).all() if s.name != "SuperAdministrador"]
             sector_var = tk.StringVar(value=sectors[0] if sectors else "")
             ttk.Combobox(create_win, textvariable=sector_var, values=sectors, state="readonly", width=28).grid(row=3, column=1, padx=5, pady=5)
             
@@ -383,21 +383,25 @@ class PasswordManagerGUI:
             ttk.Entry(edit_win, textvariable=password_var, width=30, show="*").grid(row=1, column=1, padx=5, pady=5)
             
             ttk.Label(edit_win, text="Rol:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
-            # Si el admin se edita a sí mismo, solo se permite el rol "admin"
             if self.current_user.role.name == "admin" and user.id == self.current_user.id:
                 roles = ["admin"]
             elif self.current_user.role.name == "admin":
                 roles = [r.name for r in self.auth_service.db.query(Role).all() if r.name not in ["admin", "superadmin"]]
-            else:
-                roles = [r.name for r in self.auth_service.db.query(Role).all()]
+            elif self.current_user.role.name == "superadmin":
+                # El superadmin no puede asignar el rol de superadmin a otros usuarios.
+                if user.id == self.current_user.id:
+                    roles = ["superadmin", "admin"]
+                else:
+                    roles = [r.name for r in self.auth_service.db.query(Role).all() if r.name != "superadmin"]
             role_var = tk.StringVar(value=user.role.name)
             ttk.Combobox(edit_win, textvariable=role_var, values=roles, state="readonly", width=28).grid(row=2, column=1, padx=5, pady=5)
-            
+
             ttk.Label(edit_win, text="Departamento:").grid(row=3, column=0, padx=5, pady=5, sticky="e")
             if self.current_user.role.name == "admin":
                 sectors = [self.current_user.sector.name] if self.current_user.sector else []
-            else:
-                sectors = [s.name for s in self.auth_service.db.query(Sector).all()]
+            elif self.current_user.role.name == "superadmin":
+                # Excluir el sector "SuperAdministrador" al editar en la vista de usuarios
+                sectors = [s.name for s in self.auth_service.db.query(Sector).all() if s.name != "SuperAdministrador"]
             sector_var = tk.StringVar(value=user.sector.name if user.sector else (sectors[0] if sectors else ""))
             ttk.Combobox(edit_win, textvariable=sector_var, values=sectors, state="readonly", width=28).grid(row=3, column=1, padx=5, pady=5)
             
